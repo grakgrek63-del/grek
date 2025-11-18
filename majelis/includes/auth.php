@@ -46,6 +46,23 @@ function get_current_user() {
 }
 
 /**
+ * Check if current user is admin
+ */
+function is_admin() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+}
+
+/**
+ * Get current user's wilayah (for regional users)
+ */
+function get_user_wilayah() {
+    if (is_admin()) {
+        return null; // Admin can access all regions
+    }
+    return isset($_SESSION['wilayah_id']) ? $_SESSION['wilayah_id'] : null;
+}
+
+/**
  * Hash password
  */
 function hash_password($password) {
