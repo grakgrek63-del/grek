@@ -406,8 +406,233 @@ function handleDelete($db) {
 }
 
 function handleAutoAssign($db, $input) {
-    // This is a placeholder for automatic assignment logic
-    // Will be implemented in the assignment engine
-    json_response(['success' => false, 'message' => 'Auto assignment not implemented yet'], 501);
+    if (!isset($input['wilayah_id']) || !isset($input['start_date']) || !isset($input['end_date'])) {
+        json_response(['success' => false, 'message' => 'Missing required parameters'], 400);
+    }
+
+    $user = get_current_user();
+
+    // Check wilayah access
+    if ($user['role'] !== 'admin' && $user['wilayah_id'] != $input['wilayah_id']) {
+        json_response(['success' => false, 'message' => 'Access denied'], 403);
+    }
+
+    $wilayahId = $input['wilayah_id'];
+    $startDate = $input['start_date'];
+    $endDate = $input['end_date'];
+    $assignmentType = $input['assignment_type'] ?? 'daily';
+    $days = $input['days'] ?? [];
+
+    // Validate dates
+    if (!validate_date($startDate) || !validate_date($endDate)) {
+        json_response(['success' => false, 'message' => 'Invalid date format'], 400);
+    }
+
+    if (strtotime($startDate) > strtotime($endDate)) {
+        json_response(['success' => false, 'message' => 'Start date cannot be after end date'], 400);
+    }
+
+    // Get all petugas in wilayah
+    $petugasQuery = "SELECT * FROM petugas_pentawajuh WHERE id_wilayah = :wilayah_id";
+    $petugasStmt = $db->prepare($petugasQuery);
+    $petugasStmt->bindParam(':wilayah_id', $wilayahId);
+    $petugasStmt->execute();
+    $petugasList = $petugasStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($petugasList)) {
+        json_response(['success' => false, 'message' => 'No petugas found in this wilayah'], 404);
+    }
+
+    // Get all majelis in wilayah
+    $majelisQuery = "SELECT * FROM majelis_dzikir WHERE wilayah_id = :wilayah_id";
+    $majelisStmt = $db->prepare($majelisQuery);
+    $majelisStmt->bindParam(':wilayah_id', $wilayahId);
+    $majelisStmt->execute();
+    $majelisList = $majelisStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (empty($majelisList)) {
+        json_response(['success' => false, 'message' => 'No majelis found in this wilayah'], 404);
+    }
+
+    // Generate date range
+    $dates = generateDateRange($startDate, $endDate, $assignmentType, $days);
+
+    if (empty($dates)) {
+        json_response(['success' => false, 'message' => 'No valid dates in range'], 400);
+    }
+
+    // Delete existing auto assignments for the date range
+    $deleteQuery = "DELETE FROM penugasan
+                    WHERE tanggal BETWEEN :start_date AND :end_date
+                    AND tugas = 'otomatis'
+                    AND id_majelis IN (SELECT id FROM majelis_dzikir WHERE wilayah_id = :wilayah_id)";
+    $deleteStmt = $db->prepare($deleteQuery);
+    $deleteStmt->bindParam(':start_date', $startDate);
+    $deleteStmt->bindParam(':end_date', $endDate);
+    $deleteStmt->bindParam(':wilayah_id', $wilayahId);
+    $deleteStmt->execute();
+
+    // Generate assignments for each date
+    $assignmentsCreated = 0;
+    $errors = [];
+
+    foreach ($dates as $date) {
+        try {
+            $result = generateDailyAssignments($db, $wilayahId, $date, $petugasList, $majelisList);
+            $assignmentsCreated += $result['count'];
+
+            if (!empty($result['errors'])) {
+                $errors = array_merge($errors, $result['errors']);
+            }
+        } catch (Exception $e) {
+            $errors[] = "Date $date: " . $e->getMessage();
+        }
+    }
+
+    $message = "Generated $assignmentsCreated assignments successfully";
+    if (!empty($errors)) {
+        $message .= ". Some issues occurred: " . implode('; ', array_slice($errors, 0, 3));
+        if (count($errors) > 3) {
+            $message .= " ... and " . (count($errors) - 3) . " more";
+        }
+    }
+
+    json_response([
+        'success' => true,
+        'message' => $message,
+        'data' => [
+            'assignments_created' => $assignmentsCreated,
+            'dates_processed' => count($dates),
+            'errors' => $errors
+        ]
+    ]);
+}
+
+function generateDateRange($startDate, $endDate, $type, $days = []) {
+    $dates = [];
+    $current = strtotime($startDate);
+    $end = strtotime($endDate);
+
+    while ($current <= $end) {
+        $date = date('Y-m-d', $current);
+        $dayOfWeek = date('w', $current);
+
+        if ($type === 'daily' || in_array($dayOfWeek, $days)) {
+            $dates[] = $date;
+        }
+
+        $current = strtotime('+1 day', $current);
+    }
+
+    return $dates;
+}
+
+function generateDailyAssignments($db, $wilayahId, $date, $petugasList, $majelisList) {
+    $assignmentsCreated = 0;
+    $errors = [];
+
+    // Get existing assignments for this date
+    $existingQuery = "SELECT id_petugas, id_majelis FROM penugasan WHERE tanggal = :tanggal";
+    $existingStmt = $db->prepare($existingQuery);
+    $existingStmt->bindParam(':tanggal', $date);
+    $existingStmt->execute();
+    $existingAssignments = $existingStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Filter out unavailable petugas and majelis
+    $availablePetugas = array_filter($petugasList, function($petugas) use ($existingAssignments) {
+        return !in_array($petugas['id'], array_column($existingAssignments, 'id_petugas'));
+    });
+
+    $availableMajelis = array_filter($majelisList, function($majelis) use ($existingAssignments) {
+        return !in_array($majelis['id'], array_column($existingAssignments, 'id_majelis'));
+    });
+
+    // If no available petugas or majelis, skip
+    if (empty($availablePetugas) || empty($availableMajelis)) {
+        return ['count' => 0, 'errors' => []];
+    }
+
+    // Calculate distance matrix
+    $distanceMatrix = calculateDistanceMatrix($availablePetugas, $availableMajelis);
+
+    // Use Hungarian algorithm or greedy approach for assignment
+    $assignments = assignPetugasToMajelis($availablePetugas, $availableMajelis, $distanceMatrix);
+
+    // Insert assignments
+    $insertQuery = "INSERT INTO penugasan (id_petugas, id_majelis, tanggal, tugas)
+                    VALUES (:id_petugas, :id_majelis, :tanggal, 'otomatis')";
+    $insertStmt = $db->prepare($insertQuery);
+
+    foreach ($assignments as $assignment) {
+        try {
+            $insertStmt->execute([
+                ':id_petugas' => $assignment['petugas_id'],
+                ':id_majelis' => $assignment['majelis_id'],
+                ':tanggal' => $date
+            ]);
+            $assignmentsCreated++;
+        } catch (Exception $e) {
+            $errors[] = "Failed to assign petugas {$assignment['petugas_id']} to majelis {$assignment['majelis_id']}: " . $e->getMessage();
+        }
+    }
+
+    return ['count' => $assignmentsCreated, 'errors' => $errors];
+}
+
+function calculateDistanceMatrix($petugasList, $majelisList) {
+    $matrix = [];
+
+    foreach ($petugasList as $petugas) {
+        foreach ($majelisList as $majelis) {
+            $distance = calculate_distance(
+                $petugas['latitude'], $petugas['longitude'],
+                $majelis['latitude'], $majelis['longitude']
+            );
+
+            $matrix[$petugas['id']][$majelis['id']] = $distance;
+        }
+    }
+
+    return $matrix;
+}
+
+function assignPetugasToMajelis($petugasList, $majelisList, $distanceMatrix) {
+    $assignments = [];
+    $usedPetugas = [];
+    $usedMajelis = [];
+
+    // Sort all possible assignments by distance
+    $allAssignments = [];
+    foreach ($petugasList as $petugas) {
+        foreach ($majelisList as $majelis) {
+            $allAssignments[] = [
+                'petugas_id' => $petugas['id'],
+                'majelis_id' => $majelis['id'],
+                'distance' => $distanceMatrix[$petugas['id']][$majelis['id']],
+                'petugas' => $petugas,
+                'majelis' => $majelis
+            ];
+        }
+    }
+
+    usort($allAssignments, function($a, $b) {
+        return $a['distance'] <=> $b['distance'];
+    });
+
+    // Greedy assignment: pick the closest available petugas-majelis pairs
+    foreach ($allAssignments as $assignment) {
+        if (!in_array($assignment['petugas_id'], $usedPetugas) &&
+            !in_array($assignment['majelis_id'], $usedMajelis)) {
+            $assignments[] = [
+                'petugas_id' => $assignment['petugas_id'],
+                'majelis_id' => $assignment['majelis_id']
+            ];
+
+            $usedPetugas[] = $assignment['petugas_id'];
+            $usedMajelis[] = $assignment['majelis_id'];
+        }
+    }
+
+    return $assignments;
 }
 ?>
