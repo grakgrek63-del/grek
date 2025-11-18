@@ -81,16 +81,6 @@ function get_day_name($date) {
     return $days[date('w', strtotime($date))];
 }
 
-function is_admin() {
-    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
-}
-
-function get_user_wilayah() {
-    if (is_admin()) {
-        return null; // Admin can access all regions
-    }
-    return isset($_SESSION['wilayah_id']) ? $_SESSION['wilayah_id'] : null;
-}
 
 function redirect($url) {
     header("Location: $url");
