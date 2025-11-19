@@ -27,8 +27,8 @@
     <script>
         // Global variables
         const APP_URL = '<?php echo APP_URL; ?>';
-        const USER_ROLE = '<?php echo $user['role']; ?>';
-        const USER_WILAYAH = <?php echo $user['wilayah_id'] ?: 'null'; ?>;
+        const USER_ROLE = '<?php echo isset($user['role']) ? $user['role'] : ''; ?>';
+        const USER_WILAYAH = <?php echo isset($user['wilayah_id']) ? $user['wilayah_id'] : 'null'; ?>;
 
         // Auto-hide alerts
         setTimeout(function() {
