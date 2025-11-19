@@ -10,15 +10,19 @@ let currentDrawnItems;
 
 // Initialize map when page loads
 $(document).ready(function() {
-    initializeMap();
-    loadMapData();
-    loadWilayahOptions();
-    updateStatistics();
+    // Delay initialization to ensure all scripts are loaded
+    setTimeout(function() {
+        initializeMap();
+        loadMapData();
+        loadWilayahOptions();
+        updateStatistics();
+    }, 100);
 });
 
 function initializeMap() {
     // Check if map container exists
-    if (!document.getElementById('map')) {
+    const mapContainer = document.getElementById('map');
+    if (!mapContainer) {
         console.error('Map container not found');
         return;
     }
@@ -26,6 +30,14 @@ function initializeMap() {
     // Check if Leaflet is loaded
     if (typeof L === 'undefined') {
         console.error('Leaflet library not loaded');
+        // Try to load Leaflet from CDN
+        const leafletScript = document.createElement('script');
+        leafletScript.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        leafletScript.onload = function() {
+            console.log('Leaflet loaded dynamically');
+            initializeMap();
+        };
+        document.head.appendChild(leafletScript);
         return;
     }
 
@@ -40,49 +52,52 @@ function initializeMap() {
         }).addTo(map);
 
         console.log('Map initialized successfully');
+
+        // Initialize FeatureGroup for drawn items
+        currentDrawnItems = new L.FeatureGroup();
+        map.addLayer(currentDrawnItems);
+
+        // Add draw controls for admin users
+        if (USER_ROLE === 'admin') {
+            initializeDrawControls();
+        }
+
+        // Custom icons
+        window.icons = {
+            majelis: L.divIcon({
+                html: '<i class="fas fa-mosque text-primary" style="font-size: 24px;"></i>',
+                iconSize: [30, 30],
+                className: 'custom-marker'
+            }),
+            petugas: L.divIcon({
+                html: '<i class="fas fa-user-tie text-danger" style="font-size: 24px;"></i>',
+                iconSize: [30, 30],
+                className: 'custom-marker'
+            })
+        };
+
     } catch (error) {
         console.error('Error initializing map:', error);
+        // Fallback: Show error message on page
+        if (mapContainer) {
+            mapContainer.innerHTML = `
+                <div class="alert alert-danger text-center p-4">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Error loading map:</strong> ${error.message}
+                    <br>
+                    <small>Please check your internet connection and refresh the page.</small>
+                </div>
+            `;
+        }
     }
-
-    // Initialize FeatureGroup for drawn items
-    currentDrawnItems = new L.FeatureGroup();
-    map.addLayer(currentDrawnItems);
-
-    // Add draw controls for admin users
-    if (USER_ROLE === 'admin') {
-        initializeDrawControls();
-    }
-
-    // Custom icons
-    window.icons = {
-        majelis: L.divIcon({
-            html: '<i class="fas fa-mosque text-primary" style="font-size: 24px;"></i>',
-            iconSize: [30, 30],
-            className: 'custom-marker'
-        }),
-        petugas: L.divIcon({
-            html: '<i class="fas fa-user-tie text-danger" style="font-size: 24px;"></i>',
-            iconSize: [30, 30],
-            className: 'custom-marker'
-        })
-    };
-
-    // Custom icons
-    window.icons = {
-        majelis: L.divIcon({
-            html: '<i class="fas fa-mosque text-primary" style="font-size: 24px;"></i>',
-            iconSize: [30, 30],
-            className: 'custom-marker'
-        }),
-        petugas: L.divIcon({
-            html: '<i class="fas fa-user-tie text-danger" style="font-size: 24px;"></i>',
-            iconSize: [30, 30],
-            className: 'custom-marker'
-        })
-    };
 }
 
 function initializeDrawControls() {
+    if (!map || typeof L.Control.Draw === 'undefined') {
+        console.warn('Leaflet Draw plugin not loaded');
+        return;
+    }
+
     const drawControl = new L.Control.Draw({
         edit: {
             featureGroup: currentDrawnItems,
@@ -132,9 +147,12 @@ function initializeDrawControls() {
 }
 
 function loadMapData() {
+    // Load wilayah data first
     $.ajax({
         url: 'api/wilayah.php',
         method: 'GET',
+        dataType: 'json',
+        timeout: 10000,
         success: function(response) {
             if (response.success) {
                 response.data.forEach(function(wilayah) {
@@ -146,17 +164,28 @@ function loadMapData() {
                     const group = new L.featureGroup(wilayahLayers);
                     map.fitBounds(group.getBounds().pad(0.1));
                 }
+            } else {
+                console.error('Error loading wilayah data:', response.message);
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading map data:', error);
+            showNotification('Gagal memuat data wilayah', 'error');
         }
     });
 
+    // Load markers
     loadMajelisMarkers();
     loadPetugasMarkers();
 }
 
 function loadMajelisMarkers() {
     // Clear existing markers
-    majelisMarkers.forEach(marker => map.removeLayer(marker));
+    majelisMarkers.forEach(marker => {
+        if (map && map.hasLayer(marker)) {
+            map.removeLayer(marker);
+        }
+    });
     majelisMarkers = [];
 
     const wilayahId = $('#wilayahFilter').val();
@@ -165,11 +194,18 @@ function loadMajelisMarkers() {
         url: 'api/majelis.php',
         method: 'GET',
         data: { wilayah_id: wilayahId || '' },
+        dataType: 'json',
+        timeout: 10000,
         success: function(response) {
-            if (response.success) {
+            if (response.success && response.data) {
                 response.data.forEach(function(majelis) {
-                    const marker = L.marker([majelis.latitude, majelis.longitude], {
-                        icon: window.icons.majelis
+                    if (!majelis.latitude || !majelis.longitude) {
+                        console.warn('Invalid coordinates for majelis:', majelis.nama_majelis);
+                        return;
+                    }
+
+                    const marker = L.marker([parseFloat(majelis.latitude), parseFloat(majelis.longitude)], {
+                        icon: window.icons ? window.icons.majelis : null
                     }).addTo(map);
 
                     marker.bindPopup(`
@@ -177,22 +213,32 @@ function loadMajelisMarkers() {
                             <h6><i class="fas fa-mosque me-2"></i>${majelis.nama_majelis}</h6>
                             <p class="mb-1"><strong>Alamat:</strong> ${majelis.alamat || '-'}</p>
                             <p class="mb-1"><strong>Wilayah:</strong> ${majelis.nama_wilayah || '-'}</p>
-                            <button class="btn btn-sm btn-primary" onclick="editMajelis(${majelis.id})">
-                                <i class="fas fa-edit me-1"></i>Edit
-                            </button>
+                            ${typeof editMajelis === 'function' ? `
+                                <button class="btn btn-sm btn-primary mt-2" onclick="editMajelis(${majelis.id})">
+                                    <i class="fas fa-edit me-1"></i>Edit
+                                </button>
+                            ` : ''}
                         </div>
                     `);
 
                     majelisMarkers.push(marker);
                 });
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading majelis markers:', error);
+            showNotification('Gagal memuat data majelis', 'error');
         }
     });
 }
 
 function loadPetugasMarkers() {
     // Clear existing markers
-    petugasMarkers.forEach(marker => map.removeLayer(marker));
+    petugasMarkers.forEach(marker => {
+        if (map && map.hasLayer(marker)) {
+            map.removeLayer(marker);
+        }
+    });
     petugasMarkers = [];
 
     const wilayahId = $('#wilayahFilter').val();
@@ -201,11 +247,18 @@ function loadPetugasMarkers() {
         url: 'api/petugas.php',
         method: 'GET',
         data: { wilayah_id: wilayahId || '' },
+        dataType: 'json',
+        timeout: 10000,
         success: function(response) {
-            if (response.success) {
+            if (response.success && response.data) {
                 response.data.forEach(function(petugas) {
-                    const marker = L.marker([petugas.latitude, petugas.longitude], {
-                        icon: window.icons.petugas
+                    if (!petugas.latitude || !petugas.longitude) {
+                        console.warn('Invalid coordinates for petugas:', petugas.nama);
+                        return;
+                    }
+
+                    const marker = L.marker([parseFloat(petugas.latitude), parseFloat(petugas.longitude)], {
+                        icon: window.icons ? window.icons.petugas : null
                     }).addTo(map);
 
                     marker.bindPopup(`
@@ -213,25 +266,41 @@ function loadPetugasMarkers() {
                             <h6><i class="fas fa-user-tie me-2"></i>${petugas.nama}</h6>
                             <p class="mb-1"><strong>Telepon:</strong> ${petugas.telepon || '-'}</p>
                             <p class="mb-1"><strong>Wilayah:</strong> ${petugas.nama_wilayah || '-'}</p>
-                            <button class="btn btn-sm btn-primary" onclick="editPetugas(${petugas.id})">
-                                <i class="fas fa-edit me-1"></i>Edit
-                            </button>
+                            ${typeof editPetugas === 'function' ? `
+                                <button class="btn btn-sm btn-primary mt-2" onclick="editPetugas(${petugas.id})">
+                                    <i class="fas fa-edit me-1"></i>Edit
+                                </button>
+                            ` : ''}
                         </div>
                     `);
 
                     petugasMarkers.push(marker);
                 });
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading petugas markers:', error);
+            showNotification('Gagal memuat data petugas', 'error');
         }
     });
 }
 
 function addWilayahToMap(wilayah) {
-    if (!wilayah.polygon) return;
+    if (!wilayah.polygon || !map) return;
 
     try {
         const coordinates = JSON.parse(wilayah.polygon);
-        const latLngs = coordinates.map(coord => [coord[1], coord[0]]); // Note: GeoJSON is [lon, lat]
+        if (!Array.isArray(coordinates)) {
+            console.error('Invalid polygon data:', wilayah.polygon);
+            return;
+        }
+
+        const latLngs = coordinates.map(coord => {
+            if (!Array.isArray(coord) || coord.length < 2) {
+                throw new Error('Invalid coordinate format');
+            }
+            return [coord[1], coord[0]]; // Note: GeoJSON is [lon, lat]
+        });
 
         const polygon = L.polygon(latLngs, {
             color: '#28a745',
@@ -243,7 +312,7 @@ function addWilayahToMap(wilayah) {
         polygon.bindPopup(`
             <div class="popup-content">
                 <h6><i class="fas fa-map-marked-alt me-2"></i>${wilayah.nama_wilayah}</h6>
-                ${USER_ROLE === 'admin' ? `
+                ${USER_ROLE === 'admin' && typeof editWilayah === 'function' ? `
                     <button class="btn btn-sm btn-primary me-2" onclick="editWilayah(${wilayah.id})">
                         <i class="fas fa-edit me-1"></i>Edit
                     </button>
@@ -256,7 +325,7 @@ function addWilayahToMap(wilayah) {
 
         wilayahLayers.push(polygon);
     } catch (error) {
-        console.error('Error parsing polygon coordinates:', error);
+        console.error('Error parsing polygon coordinates for', wilayah.nama_wilayah, ':', error);
     }
 }
 
@@ -264,10 +333,16 @@ function handlePolygonDrawn(layer) {
     const coordinates = layer.getLatLngs()[0].map(latlng => [latlng.lng, latlng.lat]);
     const polygonString = JSON.stringify(coordinates);
 
+    // Check if the modal and elements exist
+    if (typeof $('#wilayahPolygon').val === 'function') {
+        $('#wilayahPolygon').val(polygonString);
+    }
+
     // Show modal to create new wilayah
-    $('#wilayahPolygon').val(polygonString);
-    $('#wilayahModalLabel').text('Tambah Wilayah Baru');
-    $('#wilayahModal').modal('show');
+    if (typeof $('#wilayahModal').modal === 'function') {
+        $('#wilayahModalLabel').text('Tambah Wilayah Baru');
+        $('#wilayahModal').modal('show');
+    }
 }
 
 function handlePolygonEdited(layer) {
@@ -280,18 +355,28 @@ function handlePolygonEdited(layer) {
 }
 
 function refreshMap() {
-    showLoading();
+    if (typeof showLoading === 'function') {
+        showLoading();
+    }
 
     // Clear all layers
-    wilayahLayers.forEach(layer => map.removeLayer(layer));
+    wilayahLayers.forEach(layer => {
+        if (map && map.hasLayer(layer)) {
+            map.removeLayer(layer);
+        }
+    });
     wilayahLayers = [];
 
     // Reload data
     loadMapData();
 
     setTimeout(function() {
-        hideLoading();
-        showNotification('Peta berhasil diperbarui', 'success');
+        if (typeof hideLoading === 'function') {
+            hideLoading();
+        }
+        if (typeof showNotification === 'function') {
+            showNotification('Peta berhasil diperbarui', 'success');
+        }
     }, 1000);
 }
 
@@ -299,20 +384,27 @@ function loadWilayahOptions() {
     $.ajax({
         url: 'api/wilayah.php',
         method: 'GET',
+        dataType: 'json',
+        timeout: 10000,
         success: function(response) {
             if (response.success) {
                 const select = $('#wilayahFilter');
-                select.find('option:not(:first)').remove();
+                if (select.length) {
+                    select.find('option:not(:first)').remove();
 
-                response.data.forEach(function(wilayah) {
-                    select.append(`<option value="${wilayah.id}">${wilayah.nama_wilayah}</option>`);
-                });
+                    response.data.forEach(function(wilayah) {
+                        select.append(`<option value="${wilayah.id}">${wilayah.nama_wilayah}</option>`);
+                    });
 
-                // Set selected wilayah for regional users
-                if (USER_WILAYAH) {
-                    select.val(USER_WILAYAH).prop('disabled', true);
+                    // Set selected wilayah for regional users
+                    if (USER_WILAYAH) {
+                        select.val(USER_WILAYAH).prop('disabled', true);
+                    }
                 }
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading wilayah options:', error);
         }
     });
 }
@@ -324,18 +416,37 @@ function updateStatistics() {
         url: 'api/statistics.php',
         method: 'GET',
         data: { wilayah_id: wilayahId || '' },
+        dataType: 'json',
+        timeout: 10000,
         success: function(response) {
-            if (response.success) {
-                $('#totalMajelis').text(response.data.total_majelis || 0);
-                $('#totalPetugas').text(response.data.total_petugas || 0);
-                $('#totalPenugasan').text(response.data.total_penugasan || 0);
+            if (response.success && response.data) {
+                const totalMajelisEl = $('#totalMajelis');
+                const totalPetugasEl = $('#totalPetugas');
+                const totalPenugasanEl = $('#totalPenugasan');
+
+                if (totalMajelisEl.length) {
+                    totalMajelisEl.text(response.data.total_majelis || 0);
+                }
+                if (totalPetugasEl.length) {
+                    totalPetugasEl.text(response.data.total_petugas || 0);
+                }
+                if (totalPenugasanEl.length) {
+                    totalPenugasanEl.text(response.data.total_penugasan || 0);
+                }
             }
+        },
+        error: function(xhr, status, error) {
+            console.error('Error loading statistics:', error);
         }
     });
 }
 
 function toggleFullscreen(elementId) {
     const element = document.getElementById(elementId);
+    if (!element) {
+        console.error('Element not found:', elementId);
+        return;
+    }
 
     if (!document.fullscreenElement) {
         element.classList.add('fullscreen');
@@ -349,7 +460,9 @@ function toggleFullscreen(elementId) {
 
         // Resize map after entering fullscreen
         setTimeout(function() {
-            map.invalidateSize();
+            if (map) {
+                map.invalidateSize();
+            }
         }, 100);
     } else {
         element.classList.remove('fullscreen');
@@ -363,22 +476,28 @@ function toggleFullscreen(elementId) {
 
         // Resize map after exiting fullscreen
         setTimeout(function() {
-            map.invalidateSize();
+            if (map) {
+                map.invalidateSize();
+            }
         }, 100);
     }
 }
 
 // Handle filter form submission
-$('#filterForm').on('submit', function(e) {
-    e.preventDefault();
+$(document).ready(function() {
+    $('#filterForm').on('submit', function(e) {
+        e.preventDefault();
 
-    // Reload markers based on filter
-    loadMajelisMarkers();
-    loadPetugasMarkers();
-    updateStatistics();
+        // Reload markers based on filter
+        loadMajelisMarkers();
+        loadPetugasMarkers();
+        updateStatistics();
 
-    // Reload assignments table
-    loadAssignments();
+        // Reload assignments table
+        if (typeof loadAssignments === 'function') {
+            loadAssignments();
+        }
+    });
 });
 
 // Show notification function
