@@ -97,26 +97,30 @@
             alert('Error: ' + message);
         });
 
-        // Open modals (will be defined in respective pages)
-        function openWilayahModal(id = null) {
-            console.log('openWilayahModal called with id:', id);
-        }
+        // Open modals - these will be overridden by functions in crud.js
+        // These are placeholder functions to prevent errors before crud.js loads
+        let openWilayahModal, openMajelisModal, openPetugasModal, openUserModal, openChangePasswordModal;
 
-        function openMajelisModal(id = null) {
-            console.log('openMajelisModal called with id:', id);
-        }
-
-        function openPetugasModal(id = null) {
-            console.log('openPetugasModal called with id:', id);
-        }
-
-        function openUserModal() {
-            console.log('openUserModal called');
-        }
-
-        function openChangePasswordModal() {
-            console.log('openChangePasswordModal called');
-        }
+        // Try to assign functions from window if they exist (loaded from crud.js)
+        $(document).ready(function() {
+            setTimeout(function() {
+                if (typeof window.openWilayahModal === 'function') {
+                    openWilayahModal = window.openWilayahModal;
+                }
+                if (typeof window.openMajelisModal === 'function') {
+                    openMajelisModal = window.openMajelisModal;
+                }
+                if (typeof window.openPetugasModal === 'function') {
+                    openPetugasModal = window.openPetugasModal;
+                }
+                if (typeof window.openUserModal === 'function') {
+                    openUserModal = window.openUserModal;
+                }
+                if (typeof window.openChangePasswordModal === 'function') {
+                    openChangePasswordModal = window.openChangePasswordModal;
+                }
+            }, 500);
+        });
     </script>
 </body>
 </html>
