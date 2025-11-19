@@ -31,26 +31,67 @@ function loadAssignments() {
     $.ajax({
         url: url,
         method: 'GET',
+        timeout: 10000, // 10 second timeout
+        beforeSend: function() {
+            console.log('Loading assignments from:', url);
+            $('#assignmentsTableBody').html(`
+                <tr>
+                    <td colspan="9" class="text-center py-4">
+                        <i class="fas fa-spinner fa-spin me-2"></i>
+                        Memuat data penugasan...
+                    </td>
+                </tr>
+            `);
+        },
         success: function(response) {
+            console.log('Assignments response:', response);
             if (response.success) {
+                console.log('Loading', response.data.length, 'assignments');
                 renderAssignmentsTable(response.data);
             } else {
+                console.error('API returned error:', response.message);
                 $('#assignmentsTableBody').html(`
                     <tr>
                         <td colspan="9" class="text-center text-danger py-4">
                             <i class="fas fa-exclamation-triangle me-2"></i>
-                            ${response.message}
+                            Error: ${response.message || 'Unknown error occurred'}
                         </td>
                     </tr>
                 `);
             }
         },
         error: function(xhr, status, error) {
+            console.error('AJAX Error:', {
+                status: status,
+                error: error,
+                responseText: xhr.responseText,
+                statusCode: xhr.status
+            });
+
+            let errorMessage = 'Gagal memuat data. Silakan coba lagi.';
+
+            if (xhr.status === 0) {
+                errorMessage = 'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+            } else if (xhr.status === 401) {
+                errorMessage = 'Sesi telah berakhir. Silakan login kembali.';
+                // Redirect to login after 2 seconds
+                setTimeout(function() {
+                    window.location.href = 'login.php';
+                }, 2000);
+            } else if (xhr.status === 403) {
+                errorMessage = 'Akses ditolak. Anda tidak memiliki izin untuk melihat data ini.';
+            } else if (xhr.status === 404) {
+                errorMessage = 'API endpoint tidak ditemukan.';
+            } else if (xhr.status >= 500) {
+                errorMessage = 'Terjadi kesalahan pada server. Silakan coba lagi nanti.';
+            }
+
             $('#assignmentsTableBody').html(`
                 <tr>
                     <td colspan="9" class="text-center text-danger py-4">
-                        <i class="fas fa-wifi me-2"></i>
-                        Gagal memuat data. Silakan coba lagi.
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        ${errorMessage}
+                        <br><small class="text-muted">Status: ${xhr.status} - ${error}</small>
                     </td>
                 </tr>
             `);
