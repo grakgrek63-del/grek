@@ -54,6 +54,10 @@ function handleGet($db) {
     $tanggal = isset($_GET['tanggal']) ? $_GET['tanggal'] : null;
     $user = get_current_user();
 
+    // Debug output
+    error_log("Penugasan API - handleGet called with: ID=$id, WilayahID=$wilayahId, PetugasID=$petugasId, Tanggal=$tanggal");
+    error_log("User data: " . json_encode($user));
+
     if ($id) {
         // Get single penugasan
         $query = "SELECT p.*, pt.nama as nama_petugas, pt.telepon as telepon_petugas,
