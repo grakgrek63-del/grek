@@ -54,6 +54,11 @@ function initializeMap() {
     }
 
     try {
+        // Check if required constants are defined
+        if (typeof DEFAULT_LAT === 'undefined' || typeof DEFAULT_LNG === 'undefined' || typeof DEFAULT_ZOOM === 'undefined') {
+            throw new Error('Map constants (DEFAULT_LAT, DEFAULT_LNG, DEFAULT_ZOOM) are not defined');
+        }
+
         // Initialize Leaflet map
         map = L.map('map').setView([DEFAULT_LAT, DEFAULT_LNG], DEFAULT_ZOOM);
 
@@ -63,7 +68,7 @@ function initializeMap() {
             maxZoom: 19
         }).addTo(map);
 
-        console.log('Map initialized successfully');
+        console.log('Map initialized successfully at coordinates:', [DEFAULT_LAT, DEFAULT_LNG]);
 
         // Initialize FeatureGroup for drawn items
         currentDrawnItems = new L.FeatureGroup();
