@@ -24,6 +24,7 @@
     <script src="js/crud.js"></script>
     <script src="js/assignments.js"></script>
     <script src="js/assignments-engine.js"></script>
+    <script src="js/missing_functions.js"></script>
 
     <script>
         // Global variables
