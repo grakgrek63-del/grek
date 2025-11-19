@@ -66,6 +66,20 @@ function initializeMap() {
             className: 'custom-marker'
         })
     };
+
+    // Custom icons
+    window.icons = {
+        majelis: L.divIcon({
+            html: '<i class="fas fa-mosque text-primary" style="font-size: 24px;"></i>',
+            iconSize: [30, 30],
+            className: 'custom-marker'
+        }),
+        petugas: L.divIcon({
+            html: '<i class="fas fa-user-tie text-danger" style="font-size: 24px;"></i>',
+            iconSize: [30, 30],
+            className: 'custom-marker'
+        })
+    };
 }
 
 function initializeDrawControls() {
