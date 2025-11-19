@@ -31,6 +31,9 @@
         const APP_URL = '<?php echo APP_URL; ?>';
         const USER_ROLE = '<?php echo isset($user['role']) ? $user['role'] : ''; ?>';
         const USER_WILAYAH = <?php echo isset($user['wilayah_id']) ? $user['wilayah_id'] : 'null'; ?>;
+        const DEFAULT_LAT = <?php echo DEFAULT_LAT; ?>;
+        const DEFAULT_LNG = <?php echo DEFAULT_LNG; ?>;
+        const DEFAULT_ZOOM = <?php echo DEFAULT_ZOOM; ?>;
 
         // Auto-hide alerts
         setTimeout(function() {
