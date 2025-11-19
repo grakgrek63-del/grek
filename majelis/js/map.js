@@ -10,13 +10,25 @@ let currentDrawnItems;
 
 // Initialize map when page loads
 $(document).ready(function() {
+    console.log('Map.js loaded, checking dependencies...');
+
+    // Debug information
+    console.log('jQuery version:', $.fn.jquery);
+    console.log('Bootstrap loaded:', typeof bootstrap !== 'undefined');
+    console.log('Leaflet loaded:', typeof L !== 'undefined');
+    console.log('DEFAULT_LAT:', typeof DEFAULT_LAT !== 'undefined' ? DEFAULT_LAT : 'NOT SET');
+    console.log('DEFAULT_LNG:', typeof DEFAULT_LNG !== 'undefined' ? DEFAULT_LNG : 'NOT SET');
+    console.log('DEFAULT_ZOOM:', typeof DEFAULT_ZOOM !== 'undefined' ? DEFAULT_ZOOM : 'NOT SET');
+    console.log('USER_ROLE:', typeof USER_ROLE !== 'undefined' ? USER_ROLE : 'NOT SET');
+
     // Delay initialization to ensure all scripts are loaded
     setTimeout(function() {
+        console.log('Starting map initialization...');
         initializeMap();
         loadMapData();
         loadWilayahOptions();
         updateStatistics();
-    }, 100);
+    }, 500); // Increased delay for debugging
 });
 
 function initializeMap() {
