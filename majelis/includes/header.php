@@ -80,13 +80,13 @@ $user = get_current_user();
                         <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button"
                            data-bs-toggle="dropdown">
                             <i class="fas fa-user-circle me-1"></i>
-                            <?php echo htmlspecialchars($user['username']); ?>
-                            <span class="badge bg-<?php echo $user['role'] == 'admin' ? 'danger' : 'info'; ?> ms-1">
-                                <?php echo ucfirst($user['role']); ?>
+                            <?php echo htmlspecialchars($user['username'] ?? 'User'); ?>
+                            <span class="badge bg-<?php echo ($user['role'] ?? '') == 'admin' ? 'danger' : 'info'; ?> ms-1">
+                                <?php echo ucfirst($user['role'] ?? 'user'); ?>
                             </span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
-                            <?php if ($user['nama_wilayah']): ?>
+                            <?php if (!empty($user['nama_wilayah'])): ?>
                                 <li><span class="dropdown-item-text text-muted">
                                     <i class="fas fa-map-marker-alt me-2"></i>
                                     <?php echo htmlspecialchars($user['nama_wilayah']); ?>
