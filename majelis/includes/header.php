@@ -3,6 +3,10 @@ require_once 'includes/auth.php';
 require_auth();
 
 $user = get_current_user();
+// Ensure user is an array to prevent warnings
+if (!is_array($user)) {
+    $user = [];
+}
 ?>
 
 <!DOCTYPE html>
