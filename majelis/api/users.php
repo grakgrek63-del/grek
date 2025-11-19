@@ -23,7 +23,11 @@ try {
             handleGet($db);
             break;
         case 'POST':
-            handlePost($db, $input);
+            if (isset($input['action']) && $input['action'] === 'change_password') {
+                handleChangePassword($db, $input);
+            } else {
+                handlePost($db, $input);
+            }
             break;
         case 'PUT':
             handlePut($db, $input);
