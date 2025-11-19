@@ -68,20 +68,16 @@ function handleGet($db) {
         }
     } else {
         // Get all wilayah
-        $query = "SELECT * FROM wilayah ORDER BY nama_wilayah";
-
-        // Regional users only see their wilayah
-        if ($user['role'] !== 'admin') {
-            $query .= " LIMIT 1";
-        }
-
-        $stmt = $db->prepare($query);
-
-        if ($user['role'] !== 'admin') {
+        if ($user['role'] === 'admin') {
+            $query = "SELECT * FROM wilayah ORDER BY nama_wilayah";
+            $stmt = $db->prepare($query);
+            $stmt->execute();
+        } else {
+            $query = "SELECT * FROM wilayah WHERE id = :wilayah_id ORDER BY nama_wilayah";
+            $stmt = $db->prepare($query);
             $stmt->bindParam(':wilayah_id', $user['wilayah_id']);
+            $stmt->execute();
         }
-
-        $stmt->execute();
         $wilayah = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         json_response(['success' => true, 'data' => $wilayah]);
