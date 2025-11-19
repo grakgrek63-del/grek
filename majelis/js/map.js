@@ -435,7 +435,11 @@ function updateStatistics() {
         data: { wilayah_id: wilayahId || '' },
         dataType: 'json',
         timeout: 10000,
+        beforeSend: function() {
+            console.log('Loading statistics for wilayah:', wilayahId || 'all');
+        },
         success: function(response) {
+            console.log('Statistics response:', response);
             if (response.success && response.data) {
                 const totalMajelisEl = $('#totalMajelis');
                 const totalPetugasEl = $('#totalPetugas');
@@ -450,10 +454,25 @@ function updateStatistics() {
                 if (totalPenugasanEl.length) {
                     totalPenugasanEl.text(response.data.total_penugasan || 0);
                 }
+            } else {
+                console.error('Statistics API returned error:', response.message);
+                // Set default values
+                $('#totalMajelis').text('0');
+                $('#totalPetugas').text('0');
+                $('#totalPenugasan').text('0');
             }
         },
         error: function(xhr, status, error) {
-            console.error('Error loading statistics:', error);
+            console.error('Error loading statistics:', {
+                status: status,
+                error: error,
+                responseText: xhr.responseText,
+                statusCode: xhr.status
+            });
+            // Set default values on error
+            $('#totalMajelis').text('0');
+            $('#totalPetugas').text('0');
+            $('#totalPenugasan').text('0');
         }
     });
 }
