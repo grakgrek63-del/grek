@@ -201,4 +201,47 @@ if (!function_exists('change_password')) {
         return $update_stmt->execute();
     }
 }
+
+/**
+ * Get user by ID (for assignment modal functionality)
+ */
+if (!function_exists('get_user_by_id')) {
+    function get_user_by_id($user_id) {
+        $database = new Database();
+        $db = $database->getConnection();
+
+        $query = "SELECT u.*, w.nama_wilayah
+                  FROM user u
+                  LEFT JOIN wilayah w ON u.wilayah_id = w.id
+                  WHERE u.id = :user_id";
+        $stmt = $db->prepare($query);
+        $stmt->bindParam(':user_id', $user_id);
+        $stmt->execute();
+
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
+}
+
+/**
+ * Check if a date is valid for assignment (not in past, etc.)
+ */
+if (!function_exists('is_valid_assignment_date')) {
+    function is_valid_assignment_date($date) {
+        $today = date('Y-m-d');
+        $assignment_date = date('Y-m-d', strtotime($date));
+
+        // Don't allow assignments in the past
+        if ($assignment_date < $today) {
+            return false;
+        }
+
+        // Don't allow assignments more than 1 year in advance
+        $max_date = date('Y-m-d', strtotime('+1 year'));
+        if ($assignment_date > $max_date) {
+            return false;
+        }
+
+        return true;
+    }
+}
 ?>
