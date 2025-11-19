@@ -38,16 +38,41 @@ if (!function_exists('check_session_timeout')) {
 if (!function_exists('get_current_user')) {
     function get_current_user() {
         if (!is_logged_in()) {
-            return null;
+            return [];
         }
 
-        return [
-            'id' => $_SESSION['user_id'],
-            'username' => $_SESSION['username'],
-            'role' => $_SESSION['user_role'],
+        $userData = [
+            'id' => $_SESSION['user_id'] ?? 0,
+            'username' => $_SESSION['username'] ?? 'Unknown',
+            'role' => $_SESSION['user_role'] ?? 'user',
             'wilayah_id' => $_SESSION['wilayah_id'] ?? null,
             'nama_wilayah' => $_SESSION['nama_wilayah'] ?? null
         ];
+
+        // Load wilayah name if not in session but wilayah_id exists
+        if (!empty($userData['wilayah_id']) && empty($userData['nama_wilayah'])) {
+            try {
+                $database = new Database();
+                $db = $database->getConnection();
+
+                $query = "SELECT nama_wilayah FROM wilayah WHERE id = :wilayah_id";
+                $stmt = $db->prepare($query);
+                $stmt->bindParam(':wilayah_id', $userData['wilayah_id']);
+                $stmt->execute();
+
+                if ($stmt->rowCount() > 0) {
+                    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+                    $userData['nama_wilayah'] = $result['nama_wilayah'];
+                    // Store in session for future use
+                    $_SESSION['nama_wilayah'] = $result['nama_wilayah'];
+                }
+            } catch (Exception $e) {
+                // Log error but continue
+                error_log("Error loading wilayah name: " . $e->getMessage());
+            }
+        }
+
+        return $userData;
     }
 }
 
