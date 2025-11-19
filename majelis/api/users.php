@@ -30,6 +30,18 @@ try {
             break;
         case 'DELETE':
             handleDelete($db);
+        case 'POST':
+            if (isset($input['action']) && $input['action'] === 'change_password') {
+                handleChangePassword($db, $input);
+            } else {
+                handlePost($db, $input);
+            }
+            break;
+        case 'PUT':
+            handlePut($db, $input);
+            break;
+        case 'DELETE':
+            handleDelete($db);
             break;
         default:
             json_response(['message' => 'Method not allowed'], 405);
