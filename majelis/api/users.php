@@ -259,4 +259,57 @@ function handleDelete($db) {
         json_response(['success' => false, 'message' => 'Failed to delete user'], 500);
     }
 }
+
+function handleChangePassword($db, $input) {
+    if (!isset($input['user_id']) || !isset($input['current_password']) || !isset($input['new_password'])) {
+        json_response(['success' => false, 'message' => 'Missing required fields'], 400);
+    }
+
+    $userId = (int)$input['user_id'];
+    $currentPassword = $input['current_password'];
+    $newPassword = $input['new_password'];
+
+    // Validate new password length
+    if (strlen($newPassword) < PASSWORD_MIN_LENGTH) {
+        json_response(['success' => false, 'message' => 'Password must be at least ' . PASSWORD_MIN_LENGTH . ' characters'], 400);
+    }
+
+    // Users can only change their own password (except admin)
+    $currentUser = get_current_user();
+    if ($currentUser['role'] !== 'admin' && $userId != $currentUser['id']) {
+        json_response(['success' => false, 'message' => 'Access denied'], 403);
+    }
+
+    // Get current user data
+    $query = "SELECT password FROM user WHERE id = :user_id";
+    $stmt = $db->prepare($query);
+    $stmt->bindParam(':user_id', $userId);
+    $stmt->execute();
+
+    if ($stmt->rowCount() === 0) {
+        json_response(['success' => false, 'message' => 'User not found'], 404);
+    }
+
+    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    // Verify current password
+    if (!password_verify($currentPassword, $user['password'])) {
+        json_response(['success' => false, 'message' => 'Current password is incorrect'], 400);
+    }
+
+    // Hash new password
+    $hashedNewPassword = hash_password($newPassword);
+
+    // Update password
+    $updateQuery = "UPDATE user SET password = :new_password, updated_at = NOW() WHERE id = :user_id";
+    $updateStmt = $db->prepare($updateQuery);
+    $updateStmt->bindParam(':new_password', $hashedNewPassword);
+    $updateStmt->bindParam(':user_id', $userId);
+
+    if ($updateStmt->execute()) {
+        json_response(['success' => true, 'message' => 'Password changed successfully']);
+    } else {
+        json_response(['success' => false, 'message' => 'Failed to change password'], 500);
+    }
+}
 ?>
